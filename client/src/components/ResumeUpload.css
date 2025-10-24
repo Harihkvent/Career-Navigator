@@ -1,0 +1,55 @@
+.upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0;
+  padding: 2rem;
+  border: 2px dashed #1976d2;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.upload-container:hover {
+  border-color: #0d47a1;
+  background-color: #f5f5f5;
+}
+
+.resume-label {
+  font-size: 1.2rem;
+  color: #1976d2;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.resume-input {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.resume-input::-webkit-file-upload-button {
+  visibility: hidden;
+  width: 0;
+}
+
+.resume-input::before {
+  content: 'Select File';
+  display: inline-block;
+  background: #1976d2;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.resume-input:hover::before {
+  background: #0d47a1;
+}

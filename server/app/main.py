@@ -1,0 +1,194 @@
+from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
+from pymongo import MongoClient
+from bson import ObjectId
+import os
+import PyPDF2
+import io
+from app.services.ml_service import MLService
+from pydantic import BaseModel
+
+# Create the main application
+app = FastAPI(title="Career Navigator API")
+
+# Create the API router
+api_router = APIRouter(prefix="/api")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# MongoDB connection
+client = MongoClient("mongodb://localhost:27017/")
+db = client.career_navigator
+
+# Create uploads directory if it doesn't exist
+os.makedirs("uploads", exist_ok=True)
+
+@api_router.post("/resume/upload")
+async def upload_resume(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        file_path = f"uploads/{file.filename}"
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        text = ""
+        if file.filename.endswith('.pdf'):
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+        
+        resume_data = {
+            "filename": file.filename,
+            "file_path": file_path,
+            "content": text,
+            "processed": False
+        }
+        
+        result = db.resumes.insert_one(resume_data)
+        
+        return {
+            "message": "Resume uploaded successfully",
+            "id": str(result.inserted_id),
+            "filename": file.filename
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Job matching endpoint
+@api_router.get("/jobs/match/{resume_id}")
+async def match_jobs(resume_id: str):
+    try:
+        # Get resume
+        resume = db.resumes.find_one({"_id": ObjectId(resume_id)})
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+        
+        # Get all jobs from the database
+        jobs = list(db.jobs.find())
+        if not jobs:
+            # If no jobs exist, add sample jobs
+            await add_sample_jobs()
+            jobs = list(db.jobs.find())
+        
+        # Extract skills from resume
+        resume_skills = ml_service.extract_skills(resume["content"])
+        
+        # Get job recommendations using ML service
+        recommendations = ml_service.get_job_recommendations(
+            resume_text=resume["content"],
+            job_descriptions=jobs
+        )
+        
+        # Update resume with extracted skills if not already processed
+        if not resume.get("processed"):
+            db.resumes.update_one(
+                {"_id": ObjectId(resume_id)},
+                {
+                    "$set": {
+                        "skills": resume_skills,
+                        "processed": True
+                    }
+                }
+            )
+        
+        return recommendations
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add some sample jobs to the database
+@api_router.post("/jobs/sample")
+async def add_sample_jobs():
+    try:
+        sample_jobs = [
+            {
+                "title": "Software Engineer",
+                "company": "Tech Corp",
+                "description": """Looking for a skilled software engineer with strong expertise in Python development and modern web technologies. 
+                The ideal candidate should have hands-on experience with:
+                - Building scalable applications using Python and React
+                - Implementing cloud solutions on AWS or similar platforms
+                - Setting up and maintaining CI/CD pipelines
+                - Writing clean, maintainable, and well-tested code
+                - Working with RESTful APIs and microservices architecture""",
+                "requirements": ["Python", "React", "AWS", "CI/CD", "REST APIs", "Microservices"]
+            },
+            {
+                "title": "Full Stack Developer",
+                "company": "Web Solutions Inc",
+                "description": """We're seeking a Full Stack Developer proficient in modern web development technologies.
+                Key responsibilities include:
+                - Developing responsive web applications using React and Node.js
+                - Designing and implementing MongoDB database schemas
+                - Building RESTful APIs and real-time communication features
+                - Implementing security best practices and user authentication
+                - Collaborating with UX designers to implement intuitive interfaces""",
+                "requirements": ["JavaScript", "Node.js", "React", "MongoDB", "REST APIs", "WebSocket"]
+            },
+            {
+                "title": "ML Engineer",
+                "company": "AI Innovations",
+                "description": """Seeking an experienced Machine Learning Engineer to join our AI team.
+                Required skills and experience:
+                - Strong Python programming and data science skills
+                - Expertise in deep learning frameworks like TensorFlow
+                - Experience with NLP and text processing
+                - Knowledge of machine learning deployment and MLOps
+                - Familiarity with cloud-based ML platforms
+                - Experience with large language models and transformers""",
+                "requirements": ["Python", "TensorFlow", "NLP", "Deep Learning", "MLOps", "Cloud ML"]
+            },
+            {
+                "title": "DevOps Engineer",
+                "company": "Cloud Systems Inc",
+                "description": """Looking for a DevOps Engineer to strengthen our infrastructure team.
+                Key responsibilities:
+                - Managing and automating cloud infrastructure on AWS/Azure
+                - Implementing and maintaining CI/CD pipelines
+                - Container orchestration with Kubernetes
+                - Infrastructure as Code using Terraform
+                - Monitoring and logging implementation
+                - Security implementation and compliance""",
+                "requirements": ["AWS", "Docker", "Kubernetes", "Terraform", "CI/CD", "Security"]
+            }
+        ]
+        
+        result = db.jobs.insert_many(sample_jobs)
+        return {"message": "Sample jobs added", "count": len(result.inserted_ids)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Initialize ML Service
+ml_service = MLService()
+
+class RoadmapRequest(BaseModel):
+    resume_id: str
+    target_role: str
+
+@api_router.post("/career/roadmap")
+async def get_career_roadmap(request: RoadmapRequest):
+    try:
+        resume = db.resumes.find_one({"_id": ObjectId(request.resume_id)})
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+
+        roadmap = await ml_service.get_career_roadmap(resume["content"], request.target_role)
+        if "error" in roadmap:
+            raise HTTPException(status_code=500, detail=roadmap["error"])
+
+        return roadmap
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Include the router
+app.include_router(api_router)
