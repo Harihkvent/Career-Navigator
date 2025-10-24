@@ -1,43 +1,82 @@
-# dependencies
-/node_modules
-/.pnp
+# Dependencies
+node_modules/
+.pnp/
 .pnp.js
 
-# testing
-/coverage
+# Testing
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+*.cover
+.hypothesis/
 
-# production
-/build
+# Production
+build/
+dist/
+*.egg-info/
 
-# misc
-.DS_Store
+# Environment
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.venv/
+venv/
+ENV/
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.idea
-.vscode
+.pnpm-debug.log*
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+
+# Project specific - Client
+/client/node_modules/
+/client/build/
+/client/dist/
+/client/.env*
+!/client/.env.example
+
+# Project specific - Server
+/server/venv/
+/server/__pycache__/
+/server/dist/
+/server/build/
+/server/.env*
+!/server/.env.example
+/server/uploads/*
+!/server/uploads/.gitkeep
+
+# Misc
+.cache/
+temp/
+.temp/
+tmp/
+.tmp/
 *.tgz
 .toolstarget
-
-# python
-__pycache__/
-*.pyc
-*.pyo
-.env
-
-server\venv\
-client\node_modules\
-server\.env
-client\.env
-server\__pycache__\
-client\build\
-server\build\
-server\coverage\
-server\*.pyc
-server\*.pyo
-server\.pytest_cache\
