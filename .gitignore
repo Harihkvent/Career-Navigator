@@ -30,4 +30,5 @@ __pycache__/
 *.pyo
 .env
 
-server\venv
+server\venv\
+client\node_modules\
