@@ -32,3 +32,12 @@ __pycache__/
 
 server\venv\
 client\node_modules\
+server\.env
+client\.env
+server\__pycache__\
+client\build\
+server\build\
+server\coverage\
+server\*.pyc
+server\*.pyo
+server\.pytest_cache\
