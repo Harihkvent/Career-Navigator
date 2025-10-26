@@ -1,0 +1,72 @@
+1. Core Methodology & Architecture
+Siamese BERT (bi-encoder):
+
+BERT: A powerful, pre-trained neural network model from Google that understands the context of language.
+
+Siamese / Bi-encoder: This is an architecture where two identical BERT models are used simultaneously—one for the resume and one for the job description. They are "twins," hence the name. Each processes its respective text independently and outputs a numerical representation (an "embedding").
+
+Advantage: This is very efficient for searching, as you can pre-compute embeddings for all jobs in a database and quickly compare them to a new resume.
+
+Multiple-Negatives Ranking Loss:
+
+This is the training objective used to teach the model what a good match is.
+
+How it works: For a given "positive" pair (a resume and its correct job ad), the model is also shown several "negative" examples (the same resume paired with incorrect job ads).
+
+The Goal: The model learns to adjust its internal parameters so that the embedding of the resume is pulled closer to the embedding of the correct job and pushed further away from the embeddings of all the incorrect jobs. The "multiple-negatives" part makes the training more efficient and robust.
+
+Domain-adaptive fine-tuning on resume–job pairs:
+
+Fine-tuning: The process of taking a pre-trained, general-purpose BERT model (which knows general language) and further training it on a specific, specialized dataset.
+
+Domain-adaptive: Here, the specific domain is "human resources and job matching." By fine-tuning on pairs of resumes and job ads, the model learns the specific language, skills, and contexts relevant to this field, making it much better than a generic language model.
+
+Centroid-based retrieval:
+
+This is the method used for searching and matching at scale.
+
+Centroid: The average or central point of a set of vectors.
+
+How it works: Since a job ad can be long, it might be split into multiple chunks. Instead of comparing a resume to every single chunk, the system calculates the "centroid" (the average vector) of all chunks for a job ad. The resume is then compared to these job centroids, which is much faster and often just as effective.
+
+Truncation classifier for job-ad cleanup:
+
+Online job ads are messy. They often contain boilerplate text, legal disclaimers, company information, etc., which is not useful for matching.
+
+This is a separate, smaller model trained to identify the core, meaningful part of a job description (the actual role requirements) and "truncate" (cut off) the irrelevant parts. This cleanup step improves the quality of the job ad embeddings.
+
+2. Evaluation Metrics
+These numbers quantify how well CareerBERT performs.
+
+MRR@100 = 0.328 (Mean Reciprocal Rank)
+
+Measures: "How high is the first correct match in the list of results?"
+
+Calculation: For a query (resume), it finds the rank of the first relevant job. The "reciprocal" is 1/rank. This is averaged over all queries.
+
+Interpretation: An MRR of 0.328 means that, on average, the first correct job for a given resume appears within the top 3-4 results (1/3 ≈ 3rd, 1/4=0.25). This is a solid score when looking at the top 100 results.
+
+MAP@20 = 0.71 (Mean Average Precision)
+
+Measures: The overall quality and ranking of all relevant results in the top *k*.
+
+Interpretation: A score of 0.71 is very high. It means that in the top 20 results returned for a resume, a large majority of the truly relevant jobs are not only present but are also ranked at the top of that list.
+
+P@20 = 0.56 (Precision at 20)
+
+Measures: "What proportion of the top 20 results are relevant?"
+
+Interpretation: For every 100 jobs returned in the top 20 lists across all resumes, 56 of them are correct matches. This is a good score, indicating the model is quite accurate.
+
+MRR@20 = 0.86
+
+Same as MRR@100, but only considering the top 20 results.
+
+Interpretation: This is an excellent score. It means that for the vast majority of resumes, the first correct match is found very high in the top 20 results (often in the #1 or #2 position).
+
+Truncation accuracy = 0.96
+
+Measures how well the "truncation classifier" performs its cleanup job.
+
+Interpretation: 96% accuracy is extremely high, meaning it's very reliable at identifying and removing junk text from job ads.
+
