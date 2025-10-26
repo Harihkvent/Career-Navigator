@@ -10,7 +10,7 @@ An intelligent AI-powered career advisory platform that helps users navigate the
 - **Skills Gap Analysis**: Identify missing skills required for your target role
 - **Project Suggestions**: Get relevant project ideas to build your portfolio
 - **Certification Recommendations**: Discover certifications that can boost your career prospects
-
+- **Mock interview**: Conducts mock interview according to the user resume and role preferences.
 ## Tech Stack
 
 ### Frontend
