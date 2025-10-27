@@ -25,7 +25,7 @@ An intelligent AI-powered career advisory platform that helps users navigate the
 - scikit-learn for ML operations
 - NLTK for text processing
 - Krutrim Cloud AI for intelligent analysis
-- MongoDB for data storage
+- MongoDB for data storage and file handling
 
 ## Prerequisites
 

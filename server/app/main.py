@@ -2,9 +2,10 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from bson import ObjectId
-import os
 import PyPDF2
 import io
+from datetime import datetime
+import base64
 from app.services.ml_service import MLService
 from pydantic import BaseModel
 
@@ -27,28 +28,27 @@ app.add_middleware(
 client = MongoClient("mongodb://localhost:27017/")
 db = client.career_navigator
 
-# Create uploads directory if it doesn't exist
-os.makedirs("uploads", exist_ok=True)
-
+# Resume upload endpoint
 @api_router.post("/resume/upload")
 async def upload_resume(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        file_path = f"uploads/{file.filename}"
-        with open(file_path, "wb") as f:
-            f.write(content)
         
+        # Extract text from PDF if applicable
         text = ""
         if file.filename.endswith('.pdf'):
             pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
             for page in pdf_reader.pages:
                 text += page.extract_text()
         
+        # Store the resume data in MongoDB
         resume_data = {
             "filename": file.filename,
-            "file_path": file_path,
+            "file_content": content.decode() if file.filename.endswith('.txt') else content,
+            "file_type": file.filename.split('.')[-1].lower(),
             "content": text,
-            "processed": False
+            "processed": False,
+            "upload_date": datetime.utcnow()
         }
         
         result = db.resumes.insert_one(resume_data)
@@ -186,6 +186,28 @@ async def get_career_roadmap(request: RoadmapRequest):
             raise HTTPException(status_code=500, detail=roadmap["error"])
 
         return roadmap
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/resume/download/{resume_id}")
+async def download_resume(resume_id: str):
+    try:
+        resume = db.resumes.find_one({"_id": ObjectId(resume_id)})
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+
+        # Convert bytes to base64 for binary files
+        if isinstance(resume["file_content"], bytes):
+            file_content = base64.b64encode(resume["file_content"]).decode()
+        else:
+            file_content = resume["file_content"]
+
+        return {
+            "filename": resume["filename"],
+            "content": file_content,
+            "file_type": resume["file_type"]
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
