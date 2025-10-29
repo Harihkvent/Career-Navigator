@@ -1,19 +1,38 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter
+from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+from pymongo.server_api import ServerApi
 from bson import ObjectId
 import PyPDF2
 import io
 from datetime import datetime
 import base64
+from urllib.parse import quote_plus
 from app.services.ml_service import MLService
 from pydantic import BaseModel
+from starlette_prometheus import PrometheusMiddleware, metrics
+from app.utils.logging_config import setup_logger
+from app.utils.metrics import (
+    REQUESTS_TOTAL, REQUESTS_LATENCY, RESUME_UPLOADS,
+    JOB_MATCHES, DB_OPERATIONS, API_INFO
+)
+import time
+
+# Setup logging
+logger = setup_logger()
 
 # Create the main application
 app = FastAPI(title="Career Navigator API")
 
+# Add Prometheus middleware
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics)
+
 # Create the API router
 api_router = APIRouter(prefix="/api")
+
+# Set API information for metrics
+API_INFO.info({"version": "1.0", "name": "Career Navigator API"})
 
 # CORS middleware
 app.add_middleware(
@@ -23,33 +42,50 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# MongoDB connection
-client = MongoClient("mongodb://localhost:27017/")
+db_password = "Harihk@24"
+# MongoDB Atlas connection
+encoded_password = quote_plus(db_password)
+uri = f"mongodb+srv://harikiran19062004_db_user:{encoded_password}@cluster0.csgbg0r.mongodb.net/?appName=Cluster0"
+client = MongoClient(uri, server_api=ServerApi('1'))
 db = client.career_navigator
+
+# Test the connection
+try:
+    client.admin.command('ping')
+    print("Successfully connected to MongoDB Atlas!")
+except Exception as e:
+    print(f"Error connecting to MongoDB Atlas: {e}")
 
 # Resume upload endpoint
 @api_router.post("/resume/upload")
 async def upload_resume(file: UploadFile = File(...)):
+    start_time = time.time()
     try:
+        logger.info(f"Receiving resume upload: {file.filename}")
         content = await file.read()
         
         # Extract text from PDF if applicable
         text = ""
         if file.filename.endswith('.pdf'):
+            logger.info("Processing PDF file")
             pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
             for page in pdf_reader.pages:
                 text += page.extract_text()
         
+        file_type = file.filename.split('.')[-1].lower()
         # Store the resume data in MongoDB
         resume_data = {
             "filename": file.filename,
             "file_content": content.decode() if file.filename.endswith('.txt') else content,
-            "file_type": file.filename.split('.')[-1].lower(),
+            "file_type": file_type,
             "content": text,
             "processed": False,
             "upload_date": datetime.utcnow()
         }
+        
+        # Update metrics
+        RESUME_UPLOADS.labels(file_type=file_type).inc()
+        REQUESTS_LATENCY.labels(path="/api/resume/upload", method="POST").observe(time.time() - start_time)
         
         result = db.resumes.insert_one(resume_data)
         
@@ -65,11 +101,18 @@ async def upload_resume(file: UploadFile = File(...)):
 # Job matching endpoint
 @api_router.get("/jobs/match/{resume_id}")
 async def match_jobs(resume_id: str):
+    start_time = time.time()
     try:
+        logger.info(f"Starting job matching for resume ID: {resume_id}")
         # Get resume
         resume = db.resumes.find_one({"_id": ObjectId(resume_id)})
         if not resume:
+            logger.error(f"Resume not found: {resume_id}")
             raise HTTPException(status_code=404, detail="Resume not found")
+        
+        # Update metrics
+        JOB_MATCHES.inc()
+        DB_OPERATIONS.labels(operation="find", collection="resumes").inc()
         
         # Get all jobs from the database
         jobs = list(db.jobs.find())
@@ -211,6 +254,26 @@ async def download_resume(resume_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Middleware for request tracking
+@app.middleware("http")
+async def track_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    
+    # Update request metrics
+    REQUESTS_TOTAL.labels(
+        path=request.url.path,
+        method=request.method
+    ).inc()
+    
+    # Update latency metrics
+    REQUESTS_LATENCY.labels(
+        path=request.url.path,
+        method=request.method
+    ).observe(time.time() - start_time)
+    
+    return response
 
 # Include the router
 app.include_router(api_router)
