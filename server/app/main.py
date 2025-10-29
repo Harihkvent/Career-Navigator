@@ -12,6 +12,11 @@ from app.services.ml_service import MLService
 from pydantic import BaseModel
 from starlette_prometheus import PrometheusMiddleware, metrics
 from app.utils.logging_config import setup_logger
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 from app.utils.metrics import (
     REQUESTS_TOTAL, REQUESTS_LATENCY, RESUME_UPLOADS,
     JOB_MATCHES, DB_OPERATIONS, API_INFO
@@ -42,8 +47,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-db_password = "Harihk@24"
+
 # MongoDB Atlas connection
+db_password = os.getenv('MONGODB_PASSWORD')
+if not db_password:
+    raise ValueError("MongoDB password not found in environment variables")
+
 encoded_password = quote_plus(db_password)
 uri = f"mongodb+srv://harikiran19062004_db_user:{encoded_password}@cluster0.csgbg0r.mongodb.net/?appName=Cluster0"
 client = MongoClient(uri, server_api=ServerApi('1'))
