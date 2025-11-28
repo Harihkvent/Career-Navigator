@@ -55,6 +55,7 @@ if not db_password:
 
 encoded_password = quote_plus(db_password)
 uri = f"mongodb+srv://harikiran19062004_db_user:{encoded_password}@cluster0.csgbg0r.mongodb.net/?appName=Cluster0"
+uri = "localhost:27017"  # For local testing
 client = MongoClient(uri, server_api=ServerApi('1'))
 db = client.career_navigator
 
@@ -229,17 +230,26 @@ class RoadmapRequest(BaseModel):
 @api_router.post("/career/roadmap")
 async def get_career_roadmap(request: RoadmapRequest):
     try:
+        logger.info(f"Generating career roadmap for resume ID: {request.resume_id}, target role: {request.target_role}")
+        
         resume = db.resumes.find_one({"_id": ObjectId(request.resume_id)})
         if not resume:
+            logger.error(f"Resume not found: {request.resume_id}")
             raise HTTPException(status_code=404, detail="Resume not found")
 
         roadmap = await ml_service.get_career_roadmap(resume["content"], request.target_role)
-        if "error" in roadmap:
+        
+        if isinstance(roadmap, dict) and "error" in roadmap:
+            logger.error(f"ML Service returned error: {roadmap['error']}")
             raise HTTPException(status_code=500, detail=roadmap["error"])
 
+        # Log the successful roadmap structure for debugging
+        logger.info(f"Roadmap generated successfully - Structure: skills_gap({len(roadmap.get('skills_gap', []))}), learning_path({len(roadmap.get('learning_path', []))}), certifications({len(roadmap.get('certifications', []))}), projects({len(roadmap.get('projects', []))})")
+        
         return roadmap
 
     except Exception as e:
+        logger.error(f"Error generating roadmap: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/resume/download/{resume_id}")
